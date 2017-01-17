@@ -80,6 +80,8 @@ local textures = {
 		},
 }
 
+local isFiresOfJusticeActivated = false
+
 do
 	local frame = CreateFrame("Frame", "HolyPowerIndicatorFrame", UIParent)
 	frame:SetMovable(true)
@@ -253,10 +255,11 @@ function HolyPowerIndicator:OnInitialize()
 	end
 
 	self:RegisterEvent("UNIT_POWER")
-	
+	self:RegisterEvent("UNIT_AURA")
+
 	if select(2, UnitClass("player")) == "ROGUE" or  select(2, UnitClass("player")) == "DRUID" then
 	self:RegisterEvent("UNIT_COMBO_POINTS")
-	self:RegisterEvent("UNIT_AURA")
+	--self:RegisterEvent("UNIT_AURA")
 	end
 
 	--self:RegisterEvent("PLAYER_REGEN_ENABLED")
@@ -310,36 +313,75 @@ end
 
 function HolyPowerIndicator:UNIT_POWER(event, unit, powerType)
 	if unit == "player" and powerType == "HOLY_POWER" then
-		local power = UnitPower("player", 9)
-		if power > 0 then
-			self.frame.texture:SetTexture(textures[self.db.profile.textureSelect][power])
-			self.frame:Show()
+		self:PaladinDeterminePowerLevelDisplay()
+	end
+end
+
+function HolyPowerIndicator:PaladinUnitAuraForFiresOfJustice(event,unit)
+	if unit == "player" then
+		if UnitBuff("player", "The Fires of Justice") then
+            -- buff active
+            -- print("The Fires of Justice Activated")
+            isFiresOfJusticeActivated  = true;
+            self:PaladinDeterminePowerLevelDisplay()
 		else
-			self.frame:Hide()
+			-- buff no longer active
+			-- print("The Fires of Justice faded")
+			isFiresOfJusticeActivated = false;
+			local power = UnitPower("player", 9)
+			self:PaladinApplyPower(power)
 		end
+	end
+end
+
+function HolyPowerIndicator:PaladinDeterminePowerLevelDisplay()
+	local power = UnitPower("player", 9)
+	local adjustedPower = self:PaladinDetermineAdjustedPowerLevel(power)
+	self:PaladinApplyPower(adjustedPower)
+end
+
+function HolyPowerIndicator:PaladinDetermineAdjustedPowerLevel(actualPower)
+	local adjustedPower = actualPower;
+	if isFiresOfJusticeActivated and actualPower < 5 then
+		adjustedPower = actualPower + 1
+	end
+	-- print("ActualPower: ", actualPower, " AdjustedPower: ", adjustedPower, " isFoJActive: ", isFiresOfJusticeActivated)
+	return adjustedPower;
+end
+
+function HolyPowerIndicator:PaladinApplyPower(power)
+	if power > 0 then
+		self.frame.texture:SetTexture(textures[self.db.profile.textureSelect][power])
+		self.frame:Show()
+	else
+		self.frame:Hide()
 	end
 end
 
 function HolyPowerIndicator:UNIT_AURA(event,unit)
 	if unit == "player" then
-		local anticipation = 0
-		_,_,_,anticipation = UnitBuff("player", GetSpellInfo(114015), nil)
-		if anticipation then
-			--print("Combo Point added - Anticipation - now at: ",anticipation)
+		if 	select(2, UnitClass("player")) == "PALADIN" then
+			self:PaladinUnitAuraForFiresOfJustice(event, unit)
 		else
-			anticipation = 0
-		end
-		if not combopoints then combopoints = 0 end
-		if anticipation > 0 then
-			self.frame.texture:SetTexture(textures["roguecombopoints"][5+anticipation])
-			self.frame:Show()
-		elseif anticipation == 0 and combopoints > 0 then
-			self.frame.texture:SetTexture(textures["roguecombopoints"][combopoints])
-			self.frame:Show()		
-		else
-			--print("hidde by unitaura")
-			self.frame:Hide()
-		end
+			local anticipation = 0
+			_,_,_,anticipation = UnitBuff("player", GetSpellInfo(114015), nil)
+			if anticipation then
+				--print("Combo Point added - Anticipation - now at: ",anticipation)
+			else
+				anticipation = 0
+			end
+			if not combopoints then combopoints = 0 end
+			if anticipation > 0 then
+				self.frame.texture:SetTexture(textures["roguecombopoints"][5+anticipation])
+				self.frame:Show()
+			elseif anticipation == 0 and combopoints > 0 then
+				self.frame.texture:SetTexture(textures["roguecombopoints"][combopoints])
+				self.frame:Show()		
+			else
+				--print("hidde by unitaura")
+				self.frame:Hide()
+			end
+		end	
 	end
 end
 
